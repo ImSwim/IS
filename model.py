@@ -15,7 +15,7 @@ class Menu(Base):
     __tablename__ = "menu"
 
     menuid = Column(BIGINT, nullable=False, autoincrement=True, primary_key=True)
-    boothid = Column(BIGINT, nullable=False)
+    boothid = Column(BIGINT, ForeignKey("booth.boothid"), nullable=False)
     name = Column(TEXT, nullable=False)
     price = Column(INT, nullable=False)
 
