@@ -1,4 +1,4 @@
-from sqlalchemy import Column, TEXT, INT, BIGINT, ForeignKey
+from sqlalchemy import Column, String, INT, BIGINT, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
@@ -8,7 +8,7 @@ class Booth(Base):
     __tablename__ = "booth"
 
     boothid = Column(BIGINT, nullable=False, autoincrement=True, primary_key=True)
-    name = Column(TEXT, nullable=False)
+    name = Column(String(collation="utf8mb4_unicode_ci"), nullable=False)
     boothcode = Column(INT, nullable=False)
 
 class Menu(Base):
@@ -16,7 +16,7 @@ class Menu(Base):
 
     menuid = Column(BIGINT, nullable=False, autoincrement=True, primary_key=True)
     boothid = Column(BIGINT, ForeignKey("booth.boothid"), nullable=False)
-    name = Column(TEXT, nullable=False)
+    name = Column(String(collation="utf8mb4_unicode_ci"), nullable=False)
     price = Column(INT, nullable=False)
 
 class Order_Menu(Base):
@@ -33,10 +33,10 @@ class User(Base):
     __tablename__ = "user"
 
     userid = Column(BIGINT, nullable=False, autoincrement=True, primary_key=True)
-    email = Column(TEXT, nullable=False)
+    email = Column(String(collation="utf8mb4_unicode_ci"), nullable=False)
     password = Column(INT, nullable=False)
-    bank = Column(TEXT, nullable=True)
-    bankaccount = Column(TEXT, nullable=True)
+    bank = Column(String(collation="utf8mb4_unicode_ci"), nullable=True)
+    bankaccount = Column(String(collation="utf8mb4_unicode_ci"), nullable=True)
     bankbalance = Column(INT, nullable=True)
 
 class Staff(Base):
@@ -44,8 +44,8 @@ class Staff(Base):
 
     staffid = Column(BIGINT, nullable=False, autoincrement=True, primary_key=True)
     boothid = Column(BIGINT, nullable=False)
-    email = Column(TEXT, nullable=False)
-    password = Column(INT, nullable=False)
-    bank = Column(TEXT, nullable=True)
-    bankaccount = Column(TEXT, nullable=True)
+    email = Column(String(collation="utf8mb4_unicode_ci"), nullable=False)
+    password = Column(String(collation="utf8mb4_unicode_ci"), nullable=False)
+    bank = Column(String(collation="utf8mb4_unicode_ci"), nullable=True)
+    bankaccount = Column(String(collation="utf8mb4_unicode_ci"), nullable=True)
     bankbalance = Column(INT, nullable=True)

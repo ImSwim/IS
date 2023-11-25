@@ -7,7 +7,7 @@ DB_URL = 'mysql+pymysql://root:00000000@fiesta.c1xsexj6uj1i.us-east-1.rds.amazon
 class engineconn:
 
     def __init__(self):
-        self.engine = create_engine(DB_URL, pool_recycle = 500)
+        self.engine = create_engine(DB_URL, pool_recycle = 500, encoding="utf-8")
 
     def sessionmaker(self):
         Session = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
