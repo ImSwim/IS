@@ -11,4 +11,7 @@
 # uvicorn main:app --reload => 서버 활성화
 # http://39.124.125.152:1234
 
-uvicorn main:app --reload --host=192.168.35.163 --port=80
+uvicorn main:app --reload --host=127.0.0.1 --port=8000
+netstat -ano | findstr <포트번호>
+taskkill /f /pid <pid>
+#https://inspireworld.tistory.com/79
