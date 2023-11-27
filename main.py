@@ -2,25 +2,14 @@ from fastapi import FastAPI, HTTPException
 from dbconnection import engineconn
 from pydantic import BaseModel
 from sqlalchemy import update
-from model import Booth, Menu, Order_Menu, User, Staff
+from model import Booth, Menu, OrderMenu, User, Staff, Order
 
 app: FastAPI = FastAPI() # FastAPI 모듈
 
 engine = engineconn()
 session = engine.sessionmaker()
 
-@app.get('/')
-async def main():
-    return {'results': 'success'}
-
 '''GET'''
-
-# 활성화된 부스 목록 확인하기
-@app.get("/get/booth")
-async def getBooth():
-    booth = session.query(Booth).filter(Booth.state == 1).all()
-    return booth
-
 # 특정 부스의 메뉴 목록 확인하기
 @app.get("/menu/get/{boothId}")
 async def getMenu(boothId: int):
@@ -28,33 +17,83 @@ async def getMenu(boothId: int):
     return menu
 
 #주문 불이행 목록 확인하기
-@app.get("/order_menu/get/{boothId}")
-async def getOrder_Menu(boothId: int):
-    order_menu = session.query(Order_Menu).filter((Order_Menu.boothid == boothId) & (Order_Menu.state == 0)).all()
-    return order_menu
+@app.get("/ordermenu/get/{boothId}")
+async def getOrdermenu(boothId: int):
+    ordermenu = session.query(OrderMenu).filter((OrderMenu.boothid == boothId) & (OrderMenu.state == 0)).all()
+    return ordermenu
 
+# 로그인
+@app.get("/staff/get/{email}")
+async def getStaff(email: str):
+    staff = session.query(Staff).filter(Staff.email == email).all()
+    if not staff:
+        return {"message": f"there is no staff identified by {email}. check your email, and please log in again."}
+    return staff
+
+@app.get("/user/get/{email}")
+async def getStaff(email: str):
+    user = session.query(User).filter(User.email == email).all()
+    if not user:
+        return {"message": f"there is no user identified by {email}. check your email, and please log in again."}
+    return user
 
 '''INSERT'''
 
-# 주문 내역 DB에 넣기
-class Order_Menu(BaseModel):
-    userid : int
-    boothid : int
+# ordermenu, order 데이터 저장하기
+
+#pydantic models
+class OrderMenuCreate(BaseModel):
     orderid : int
     menuid : int
+    boothid : int
     amount : int
     state : int
-
-@app.post("/insert/order_menu")
-async def insertOrder_Menu(order_menu: Order_Menu):
-    try:
-        session.add(order_menu)
+class OrderCreate(BaseModel):
+    boothid : int
+    userid : int
+    tablenumber : int
+    totalprice : int
+@app.get("/ordermenu/post")
+async def postOrdermenu(ordermenus: list[OrderMenuCreate], order: OrderCreate):
+    # order 먼저 저장
+    session.add(order)
+    session.commit()
+    session.refresh(order)
+    totalprice = 0
+    # ordermenu 저장
+    for ordermenu in ordermenus:
+        dbordermenu = OrderMenu(
+            orderid = order.orderid,
+            menuid  = ordermenu.menuid,
+            boothid = ordermenu.boothid,
+            amount  = ordermenu.amount,
+            state   = 0
+        )
+        # 주문 목록 개별 저장
+        session.add(dbordermenu)
         session.commit()
-    except Exception as e:
-        return {"message": f"Error inserting order menu: {str(e)}"}
+        session.refresh(dbordermenu)
 
-    return {"message": "success"}
+        menu = session.query(Menu).filter(Menu.id == ordermenu.menuid).first()                                          # 총 금액 계산
+        totalprice += menu.price * ordermenu.amount
 
+    # order total price update
+    session.execute(update(Order).where(Order.orderid == order.orderid).values(totalprice=totalprice))
+    session.commit()
+
+    user = session.query(User).filter(User.id == order.userid).first()                                              # User 테이블과 Staff 테이블의 bankbalance 업데이트
+    staff = session.query(Staff).filter((Staff.boothid == order.boothid) & (Staff.priority == 1)).first()
+
+    if user.bankbalance < totalprice:                                                                                   # User 잔액이 부족한 경우 오류
+        raise HTTPException(
+            status_code=400,
+            detail="Insufficient funds. first, please recharge your bank account.",
+        )
+    user.bankbalance -= totalprice
+    staff.bankbalance += totalprice
+    session.commit()
+
+    return {"message": 'success'}
 
 '''delete'''
 
@@ -72,19 +111,19 @@ async def deleteMenu(menuId : int):
 '''Update'''
 
 # 주문 이행 상태 업데이트
-@app.get("/update/order_menu/{order_menuId}")
-async def updateordermenu(order_menuId : int) :
-    upordermenu = session.query(Order_Menu).filter(Order_Menu.order_menuid == order_menuId).first()
-    if not upordermenu :
-        return {"message": f"there is no order id: {order_menuId}"}
-    session.execute(update(Order_Menu).where(Order_Menu.order_menuid == order_menuId).values(state=1))
+@app.get("/ordermenustate/update/{ordermenuId}")
+async def updateOrdermenuState(ordermenuId : int) :
+    upordermenu = session.query(OrderMenu).filter(OrderMenu.ordermenuid == ordermenuId).first()
+    if not upordermenu:
+        return {"message": f"there is no order id: {ordermenuId}"}
+    session.execute(update(OrderMenu).where(OrderMenu.ordermenuid == ordermenuId).values(state=1))
     session.commit()
 
     return {"message": 'success'}
 
 # 부스 상태 활성화 및 부스 아이디 반환
 @app.get("/boothstate/update/{boothCode}")
-async def updateordermenu(boothCode : int) :
+async def updateBoothState(boothCode : int) :
     booth = session.query(Booth).filter(Booth.boothcode == boothCode).first()
     if not booth:
         return {"message": f"there is no booth for {boothCode}"}
@@ -92,3 +131,16 @@ async def updateordermenu(boothCode : int) :
     session.commit()
 
     return booth.boothid
+
+# 사용자 계좌 잔액 충전
+@app.get("/userbankbalance/update/{userId}/{chargeAmount}")
+async def updateBoothState(userId : int, chargeAmount : int) :
+    user = session.query(User).filter(User.userid == userId).first()
+    if not user:
+        return {"message": f"you should log-in again."}
+    newbankbalance = 0
+    newbankbalance += user.bankbalance + chargeAmount
+    session.execute(update(User).where(User.userid == userId).values(bankbalance=newbankbalance))
+    session.commit()
+    session.refresh(user)
+    return {"message": f"now your bankbalance is {user.bankbalance}."}

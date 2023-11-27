@@ -16,7 +16,7 @@ class Booth(Base):
     staffs = relationship('Staff', back_populates='booths')
     orders = relationship('Order', back_populates='booths')
     menus = relationship('Menu', back_populates='booths')
-    order_menus = relationship('Order_Menu', back_populates='booths')
+    ordermenus = relationship('OrderMenu', back_populates='booths')
 
 class Menu(Base):
     __tablename__ = "menu"
@@ -28,7 +28,7 @@ class Menu(Base):
     # 인용함
     booths = relationship('Booth', back_populates='menus')
     # 인용 당함
-    order_menus = relationship('Order_Menu', back_populates='menus')
+    ordermenus = relationship('OrderMenu', back_populates='menus')
 
 class Order(Base):
     __tablename__ = "order"
@@ -37,19 +37,19 @@ class Order(Base):
     boothid = Column(BigInteger,  ForeignKey("booth.boothid"), nullable=False)
     userid = Column(BigInteger,  ForeignKey("user.userid"), nullable=False)
     tablenumber = Column(Integer, nullable=False)
-    totalprice = Column(Integer, nullable=False)
+    totalprice = Column(Integer, nullable=True)
 
     # 인용함
     booths = relationship('Booth', back_populates='orders')
     users = relationship('User', back_populates='orders')
 
     #인용 당함
-    order_menus = relationship('Order_Menu', back_populates='orders')
+    ordermenus = relationship('OrderMenu', back_populates='orders')
 
-class Order_Menu(Base):
+class OrderMenu(Base):
     __tablename__ = "order_menu"
 
-    order_menuid = Column(BigInteger, nullable=False, autoincrement=True, primary_key=True)
+    ordermenuid = Column(BigInteger, nullable=False, autoincrement=True, primary_key=True)
     orderid = Column(BigInteger, ForeignKey("order.orderid"), nullable=False)
     menuid = Column(BigInteger, ForeignKey("menu.menuid"), nullable=False)
     boothid = Column(BigInteger,  ForeignKey("booth.boothid"), nullable=False)
@@ -57,9 +57,9 @@ class Order_Menu(Base):
     state = Column(Integer, nullable=False)
 
     # 인용함
-    booths = relationship('Booth', back_populates='order_menus')
-    menus = relationship('Menu', back_populates='order_menus')
-    orders = relationship('Order', back_populates='order_menus')
+    booths = relationship('Booth', back_populates='ordermenus')
+    menus = relationship('Menu', back_populates='ordermenus')
+    orders = relationship('Order', back_populates='ordermenus')
 ###########
 
 class User(Base):
