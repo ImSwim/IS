@@ -31,7 +31,7 @@ async def getStaff(email: str):
     return staff
 
 @app.get("/user/get/{email}")
-async def getStaff(email: str):
+async def getUser(email: str):
     user = session.query(User).filter(User.email == email).all()
     if not user:
         return {"message": f"there is no user identified by {email}. check your email, and please log in again."}
