@@ -38,6 +38,36 @@ async def getUser(email: str):
     return user
 
 '''INSERT'''
+# Menu 추가하기
+class AddMenu(BaseModel):
+    boothid: int
+    name: str
+    price: int
+
+# 새로운 메뉴를 추가
+@app.post("/menu/add/{boothid}")
+async def add_menu(boothId: int, menu_data: AddMenu):
+
+    try:
+        # Use boothId from the path parameters
+        menu_data.boothid = boothId
+        # 여기서 "boothId" 대신 "boothid"를 사용
+        new_menu = Menu(boothid = menu_data.boothid,
+                        name = menu_data.name,
+                        price = menu_data.price
+                        )
+
+        # 새로운 메뉴를 데이터베이스에 추가
+        session.add(new_menu)
+        session.commit()
+        session.refresh(new_menu)
+
+        return "Success"
+
+    except Exception as e:
+        # 에러가 발생한 경우 트랜잭션 롤백
+        session.rollback()
+        raise HTTPException(status_code=500, detail=f"내부 서버 오류: {str(e)}")
 
 # ordermenu, order 데이터 저장하기
 
