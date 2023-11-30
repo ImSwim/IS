@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from dbconnection import engineconn
 from pydantic import BaseModel
 from sqlalchemy import update
-from typing import List
+from typing import List, Optional
 from model import *
 
 app: FastAPI = FastAPI() # FastAPI 모듈
