@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from dbconnection import engineconn
 from pydantic import BaseModel
 from sqlalchemy import update
+from typing import List
 from model import *
 
 app: FastAPI = FastAPI() # FastAPI 모듈
@@ -132,7 +133,7 @@ class OrderCreate(BaseModel):
     tablenumber : int
     totalprice : int
 @app.get("/ordermenu/post")
-async def postOrdermenu(ordermenus: list[OrderMenuCreate], order: OrderCreate):
+async def postOrdermenu(ordermenus: List[OrderMenuCreate], order: OrderCreate):
     # order 먼저 저장
     session.add(order)
     session.commit()
