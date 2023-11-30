@@ -2,12 +2,17 @@ from fastapi import FastAPI, HTTPException
 from dbconnection import engineconn
 from pydantic import BaseModel
 from sqlalchemy import update
+from typing import List, Optional
 from model import *
 
 app: FastAPI = FastAPI() # FastAPI 모듈
 
 engine = engineconn()
 session = engine.sessionmaker()
+
+@app.get("/")
+async def Main():
+    return {"message": 'success'}
 
 '''GET'''
 # 특정 부스의 메뉴 목록 확인하기
@@ -22,7 +27,7 @@ async def getOrdermenu(boothId: int):
     ordermenu = session.query(OrderMenu).filter((OrderMenu.boothid == boothId) & (OrderMenu.state == 0)).all()
     return ordermenu
 
-# 로그인
+# 로그인, 회원 정보 수정 등에 사용
 @app.get("/staff/get/{email}")
 async def getStaff(email: str):
     staff = session.query(Staff).filter(Staff.email == email).all()
@@ -37,64 +42,16 @@ async def getUser(email: str):
         return {"message": f"there is no user identified by {email}. check your email, and please log in again."}
     return user
 
-# 수정할 회원 정보 확인
-@app.get("/user/{email}/modify")
-async def user_information(email:str):
-    user = session.query(User).filter(User.email == email).first()
-    if user is None:
-        raise HTTPException(status_code=404, detail="등록되지 않은 사용자입니다.")
-    # userid 필드를 제외한 사용자 정보 반환
-    user_info = {
-        "bank": user.bank,
-        "bankaccount": user.bankaccount,
-        "email": user.email,
-        "password": user.password,
-        "bankbalance": user.bankbalance
-    }
-
-    return user_info
-
-@app.get("/staff/{email}/modify")
-def staff_information(email: str):
-    staff = session.query(Staff).filter(Staff.email == email).first()
-    if staff is None:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
-
-    # priority에 따라 보여질 정보 동적으로 처리
-    try:
-        priority_value = int(staff.priority.decode('utf-8'))
-        if priority_value == 0:
-            staff_info = {
-                "email": staff.email,
-                "password": staff.password,
-                "bank": staff.bank,
-                "bankaccount": staff.bankaccount,
-                "bankbalance": staff.bankbalance
-            }
-        elif priority_value == 1:
-            staff_info = {
-                "email": staff.email,
-                "password": staff.password
-            }
-        else:
-            # priority가 0 또는 1이 아닌 경우에 대한 처리 추가
-            raise ValueError(f"예기치 않은 priority 값: {priority_value}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"서버 오류: {str(e)}")
-
-    return staff_info
-
-
 '''INSERT'''
 # Menu 추가하기
-class AddMenu(BaseModel):
+class MenuCreate(BaseModel):
     boothid: int
     name: str
     price: int
 
 # 새로운 메뉴를 추가
 @app.post("/menu/add/{boothid}")
-async def add_menu(boothId: int, menu_data: AddMenu):
+async def addMenu(boothId: int, menu_data: MenuCreate):
 
     try:
         # Use boothId from the path parameters
@@ -132,7 +89,7 @@ class OrderCreate(BaseModel):
     tablenumber : int
     totalprice : int
 @app.get("/ordermenu/post")
-async def postOrdermenu(ordermenus: list[OrderMenuCreate], order: OrderCreate):
+async def postOrdermenu(ordermenus: List[OrderMenuCreate], order: OrderCreate):
     # order 먼저 저장
     session.add(order)
     session.commit()
@@ -173,14 +130,16 @@ async def postOrdermenu(ordermenus: list[OrderMenuCreate], order: OrderCreate):
 
     return {"message": 'success'}
 
-class UpdateUser(BaseModel):
+
+''' PUT(UPDATE) '''
+class UserCreate(BaseModel):
     email : str
     password :str
     bank : str
     bankaccount : str
     bankbalance : int
 
-class UpdateStaff(BaseModel):
+class StaffCreate(BaseModel):
     email: str
     password: str
     bank: Optional[str] = None
@@ -188,8 +147,8 @@ class UpdateStaff(BaseModel):
     bankbalance: Optional[int] = None
 
 # 회원정보 수정하기
-@app.put("/user/{email}/modify")
-def update_user_information(email: str, updated_info: UpdateUser):
+@app.put("/user/update/{email}")
+def updateUser(email: str, updated_info: UserCreate):
     user = session.query(User).filter(User.email == email).first()
     if user is None:
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
@@ -206,8 +165,8 @@ def update_user_information(email: str, updated_info: UpdateUser):
 
     return user
 
-@app.put("/staff/{email}/modify")
-def update_staff_information(email: str, updated_info: UpdateStaff):
+@app.get("/staff/update/{email}")
+def updateStaff(email: str, updated_info: StaffCreate):
     try:
         staff = session.query(Staff).filter(Staff.email == email).first()
         if staff is None:
@@ -232,26 +191,11 @@ def update_staff_information(email: str, updated_info: UpdateStaff):
         session.refresh(staff)
 
         return staff
+    
     except Exception as e:
         print(f"An error occurred: {e}")
         raise
 
-
-
-'''delete'''
-
-# 메뉴 삭제하기
-@app.delete("/delete/menu/{menuId}")
-async def deleteMenu(menuId : int):
-    menu = session.query(Menu).filter(Menu.menuid == menuId).first()
-    if not menu:
-        return {"message": f"there is no menu id : {menuId}"}
-    session.delete(menu)
-    session.commit()
-
-    return {"message": 'success'}
-
-'''Update'''
 
 # 주문 이행 상태 업데이트
 @app.get("/ordermenustate/update/{ordermenuId}")
@@ -277,7 +221,7 @@ async def updateBoothState(boothCode : int) :
 
 # 사용자 계좌 잔액 충전
 @app.get("/userbankbalance/update/{userId}/{chargeAmount}")
-async def updateBoothState(userId : int, chargeAmount : int) :
+async def updateUserBankbalance(userId : int, chargeAmount : int) :
     user = session.query(User).filter(User.userid == userId).first()
     if not user:
         return {"message": f"you should log-in again."}
@@ -287,4 +231,18 @@ async def updateBoothState(userId : int, chargeAmount : int) :
     session.commit()
     session.refresh(user)
     return {"message": f"now your bankbalance is {user.bankbalance}."}
+
+
+'''delete'''
+
+# 메뉴 삭제하기
+@app.delete("/delete/menu/{menuId}")
+async def deleteMenu(menuId : int):
+    menu = session.query(Menu).filter(Menu.menuid == menuId).first()
+    if not menu:
+        return {"message": f"there is no menu id : {menuId}"}
+    session.delete(menu)
+    session.commit()
+
+    return {"message": 'success'}
 
