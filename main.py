@@ -67,7 +67,7 @@ async def addMenu(boothId: int, menu_data: MenuCreate):
         session.commit()
         session.refresh(new_menu)
 
-        return "Success"
+        return {"message": 'success'}
 
     except Exception as e:
         # 에러가 발생한 경우 트랜잭션 롤백
