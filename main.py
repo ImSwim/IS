@@ -10,6 +10,10 @@ app: FastAPI = FastAPI() # FastAPI 모듈
 engine = engineconn()
 session = engine.sessionmaker()
 
+@app.get("/")
+async def Main():
+    return {"message": 'success'}
+
 '''GET'''
 # 특정 부스의 메뉴 목록 확인하기
 @app.get("/menu/get/{boothId}")
@@ -111,7 +115,7 @@ async def add_menu(boothId: int, menu_data: AddMenu):
         session.commit()
         session.refresh(new_menu)
 
-        return "Success"
+        return {"message": 'success'}
 
     except Exception as e:
         # 에러가 발생한 경우 트랜잭션 롤백
