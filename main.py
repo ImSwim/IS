@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from dbconnection import engineconn
 from pydantic import BaseModel
 from sqlalchemy import update
-from model import Booth, Menu, OrderMenu, User, Staff, Order
+from model import *
 
 app: FastAPI = FastAPI() # FastAPI 모듈
 
@@ -36,6 +36,54 @@ async def getUser(email: str):
     if not user:
         return {"message": f"there is no user identified by {email}. check your email, and please log in again."}
     return user
+
+# 수정할 회원 정보 확인
+@app.get("/user/{email}/modify")
+async def user_information(email:str):
+    user = session.query(User).filter(User.email == email).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="등록되지 않은 사용자입니다.")
+    # userid 필드를 제외한 사용자 정보 반환
+    user_info = {
+        "bank": user.bank,
+        "bankaccount": user.bankaccount,
+        "email": user.email,
+        "password": user.password,
+        "bankbalance": user.bankbalance
+    }
+
+    return user_info
+
+@app.get("/staff/{email}/modify")
+def staff_information(email: str):
+    staff = session.query(Staff).filter(Staff.email == email).first()
+    if staff is None:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+    # priority에 따라 보여질 정보 동적으로 처리
+    try:
+        priority_value = int(staff.priority.decode('utf-8'))
+        if priority_value == 0:
+            staff_info = {
+                "email": staff.email,
+                "password": staff.password,
+                "bank": staff.bank,
+                "bankaccount": staff.bankaccount,
+                "bankbalance": staff.bankbalance
+            }
+        elif priority_value == 1:
+            staff_info = {
+                "email": staff.email,
+                "password": staff.password
+            }
+        else:
+            # priority가 0 또는 1이 아닌 경우에 대한 처리 추가
+            raise ValueError(f"예기치 않은 priority 값: {priority_value}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"서버 오류: {str(e)}")
+
+    return staff_info
+
 
 '''INSERT'''
 # Menu 추가하기
@@ -125,6 +173,71 @@ async def postOrdermenu(ordermenus: list[OrderMenuCreate], order: OrderCreate):
 
     return {"message": 'success'}
 
+class UpdateUser(BaseModel):
+    email : str
+    password :str
+    bank : str
+    bankaccount : str
+    bankbalance : int
+
+class UpdateStaff(BaseModel):
+    email: str
+    password: str
+    bank: Optional[str] = None
+    bankaccount: Optional[str] = None
+    bankbalance: Optional[int] = None
+
+# 회원정보 수정하기
+@app.put("/user/{email}/modify")
+def update_user_information(email: str, updated_info: UpdateUser):
+    user = session.query(User).filter(User.email == email).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+    # 업데이트할 필드가 허용된 필드인지 확인하고 업데이트
+    for key, value in updated_info.dict().items():
+        if value is not None:
+            setattr(user, key, value)
+        else:
+            raise HTTPException(status_code=400, detail=f"'{key}' 필드는 필수 입력값입니다.")
+
+    session.commit()
+    session.refresh(user)
+
+    return user
+
+@app.put("/staff/{email}/modify")
+def update_staff_information(email: str, updated_info: UpdateStaff):
+    try:
+        staff = session.query(Staff).filter(Staff.email == email).first()
+        if staff is None:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+        # 정보를 업데이트하기 전에 priority를 확인
+        priority_value = int(staff.priority.decode('utf-8'))
+        if priority_value == 0:
+            # priority가 0인 경우에는 허용된 필드만 업데이트
+            allowed_fields = ["email", "password", "bank", "bankaccount", "bankbalance"]
+        elif priority_value == 1:
+            # priority가 1인 경우에는 email과 password만 업데이트
+            allowed_fields = ["email", "password"]
+        else:
+            raise HTTPException(status_code=400, detail="잘못된 priority 값입니다.")
+        # 업데이트할 필드가 허용된 필드인지 확인하고 업데이트
+        for key, value in updated_info.dict().items():
+            if key in allowed_fields:
+                setattr(staff, key, value)
+
+        session.commit()
+        session.refresh(staff)
+
+        return staff
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        raise
+
+
+
 '''delete'''
 
 # 메뉴 삭제하기
@@ -174,3 +287,4 @@ async def updateBoothState(userId : int, chargeAmount : int) :
     session.commit()
     session.refresh(user)
     return {"message": f"now your bankbalance is {user.bankbalance}."}
+
