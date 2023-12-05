@@ -17,8 +17,20 @@ async def Main():
 '''GET'''
 @app.get("/booth/get")
 async def getBooth():
-    booth = session.query(Booth).all()
+    booth = session.query(Booth).filter(Booth.state == 1).all()
     return booth
+# 부스 상태 확인 및 부스 객체 반환
+@app.get("/booth/get/{boothCode}")
+async def getBoothbyCode(boothCode : int) :
+    booth = session.query(Booth).filter(Booth.boothcode == boothCode).first()
+    if not booth:
+        return {"message": f"there is no booth identified by {boothCode}"}
+    else:
+        if booth.state == 1:
+            return booth
+        else:
+            return {"message": f"booth is not activated. login as 1st staff at first."}
+
 # 특정 부스의 메뉴 목록 확인하기
 @app.get("/menu/get/{boothId}")
 async def getMenu(boothId: int):
@@ -34,14 +46,14 @@ async def getOrdermenu(boothId: int):
 # 로그인, 회원 정보 수정 등에 사용
 @app.get("/staff/get/{email}")
 async def getStaff(email: str):
-    staff = session.query(Staff).filter(Staff.email == email).all()
+    staff = session.query(Staff).filter(Staff.email == email).first()
     if not staff:
         return {"message": f"there is no staff identified by {email}. check your email, and please log in again."}
     return staff
 
 @app.get("/user/get/{email}")
 async def getUser(email: str):
-    user = session.query(User).filter(User.email == email).all()
+    user = session.query(User).filter(User.email == email).first()
     if not user:
         return {"message": f"there is no user identified by {email}. check your email, and please log in again."}
     return user
@@ -79,27 +91,34 @@ async def postMenu(menu_data: MenuCreate):
 
 #pydantic models
 class OrderMenuCreate(BaseModel):
-    orderid : int
+    orderid : Optional[int] = None
     menuid : int
     boothid : int
     amount : int
-    state : int
+    state : Optional[int] = 0
 class OrderCreate(BaseModel):
     boothid : int
     userid : int
     tablenumber : int
-    totalprice : int
-@app.get("/ordermenu/post")
+    totalprice : Optional[int] = 0
+@app.post("/ordermenu/post")
 async def postOrdermenu(ordermenus: List[OrderMenuCreate], order: OrderCreate):
     # order 먼저 저장
-    session.add(order)
+    dborder = Order(
+            boothid  = order.boothid,
+            userid = order.userid,
+            tablenumber  = order.tablenumber,
+            totalprice   = order.totalprice
+        )
+    session.add(dborder)
     session.commit()
-    session.refresh(order)
+    session.refresh(dborder)
+    
     totalprice = 0
     # ordermenu 저장
     for ordermenu in ordermenus:
         dbordermenu = OrderMenu(
-            orderid = order.orderid,
+            orderid = dborder.orderid,
             menuid  = ordermenu.menuid,
             boothid = ordermenu.boothid,
             amount  = ordermenu.amount,
@@ -110,15 +129,15 @@ async def postOrdermenu(ordermenus: List[OrderMenuCreate], order: OrderCreate):
         session.commit()
         session.refresh(dbordermenu)
 
-        menu = session.query(Menu).filter(Menu.id == ordermenu.menuid).first()                                          # 총 금액 계산
+        menu = session.query(Menu).filter(Menu.menuid == ordermenu.menuid).first()                                          # 총 금액 계산
         totalprice += menu.price * ordermenu.amount
 
     # order total price update
-    session.execute(update(Order).where(Order.orderid == order.orderid).values(totalprice=totalprice))
+    session.execute(update(Order).where(Order.orderid == dborder.orderid).values(totalprice=totalprice))
     session.commit()
 
-    user = session.query(User).filter(User.id == order.userid).first()                                              # User 테이블과 Staff 테이블의 bankbalance 업데이트
-    staff = session.query(Staff).filter((Staff.boothid == order.boothid) & (Staff.priority == 1)).first()
+    user = session.query(User).filter(User.userid == dborder.userid).first()                                              # User 테이블과 Staff 테이블의 bankbalance 업데이트
+    staff = session.query(Staff).filter((Staff.boothid == dborder.boothid) & (Staff.priority == 1)).first()
 
     if user.bankbalance < totalprice:                                                                                   # User 잔액이 부족한 경우 오류
         raise HTTPException(
@@ -127,9 +146,11 @@ async def postOrdermenu(ordermenus: List[OrderMenuCreate], order: OrderCreate):
         )
     user.bankbalance -= totalprice
     staff.bankbalance += totalprice
+    session.execute(update(User).where(User.userid == user.userid).values(bankbalance=user.bankbalance))
+    session.execute(update(Staff).where(Staff.staffid == staff.staffid).values(bankbalance=staff.bankbalance))
     session.commit()
 
-    return {"message": 'success'}
+    return totalprice
 
 ## POST USER
 class UserCreate(BaseModel):
@@ -137,18 +158,18 @@ class UserCreate(BaseModel):
     password: str
     bank: str
     bankaccount : str
-    bankbalance : int
+    bankbalance : Optional[int] = int(0)
 
 # 새로운 메뉴를 추가
-@app.get("/user/post")
+@app.post("/user/post")
 async def postUser(user_data: UserCreate):
 
     try:
         new_user = User(email = user_data.email,
                         password = user_data.password,
                         bank = user_data.bank,
-                        bankaccount = user_data.bank,
-                        bankbalance = int(0)
+                        bankaccount = user_data.bankaccount,
+                        bankbalance = user_data.bankbalance
                         )
 
         # 새로운 메뉴를 데이터베이스에 추가
@@ -170,24 +191,23 @@ class StaffCreate(BaseModel):
     password: str
     bank: str
     bankaccount : str
-    bankbalance : int
+    bankbalance : Optional[int] = int(0)
     priority : int
 
 # 새로운 메뉴를 추가
-@app.get("/staff/post")
-async def postUser(staff_data: StaffCreate):
-
+@app.post("/staff/post")
+async def postStaff(staff_data: StaffCreate):
     try:
         new_staff = Staff(boothid = staff_data.boothid,
-                        email = staff_data.email,
-                        password = staff_data.password,
-                        bank = staff_data.bank,
-                        bankaccount = staff_data.bankaccount,
-                        bankbalance = int(0),
-                        priority = staff_data.priority
-                        )
+                    email = staff_data.email,
+                    password = staff_data.password,
+                    bank = staff_data.bank,
+                    bankaccount = staff_data.bankaccount,
+                    bankbalance = int(0),
+                    priority = staff_data.priority
+                    )
 
-        # 새로운 메뉴를 데이터베이스에 추가
+    # 새로운 메뉴를 데이터베이스에 추가
         session.add(new_staff)
         session.commit()
         session.refresh(new_staff)
@@ -216,7 +236,7 @@ class StaffCreate(BaseModel):
     bankbalance: Optional[int] = None
 
 # 회원정보 수정하기
-@app.get("/user/update/{email}")
+@app.put("/user/update/{email}")
 def updateUser(email: str, updated_info: UserCreate):
     user = session.query(User).filter(User.email == email).first()
     if user is None:
@@ -234,7 +254,7 @@ def updateUser(email: str, updated_info: UserCreate):
 
     return user
 
-@app.get("/staff/update/{email}")
+@app.put("/staff/update/{email}")
 def updateStaff(email: str, updated_info: StaffCreate):
     try:
         staff = session.query(Staff).filter(Staff.email == email).first()
@@ -267,29 +287,30 @@ def updateStaff(email: str, updated_info: StaffCreate):
 
 
 # 주문 이행 상태 업데이트
-@app.get("/ordermenustate/update/{ordermenuId}")
+@app.put("/ordermenustate/update/{ordermenuId}")
 async def updateOrdermenuState(ordermenuId : int) :
     upordermenu = session.query(OrderMenu).filter(OrderMenu.ordermenuid == ordermenuId).first()
     if not upordermenu:
         return {"message": f"there is no order id: {ordermenuId}"}
     session.execute(update(OrderMenu).where(OrderMenu.ordermenuid == ordermenuId).values(state=1))
     session.commit()
-
-    return upordermenu
+    ordermenu = session.query(OrderMenu).filter(OrderMenu.ordermenuid == ordermenuId).first()
+    return ordermenu
 
 # 부스 상태 활성화 및 부스 아이디 반환
-@app.get("/boothstate/update/{boothCode}")
+@app.put("/boothstate/update/{boothCode}")
 async def updateBoothState(boothCode : int) :
     booth = session.query(Booth).filter(Booth.boothcode == boothCode).first()
     if not booth:
-        return {"message": f"there is no booth for {boothCode}"}
-    session.execute(update(Booth).where(Booth.boothid == boothCode).values(state=1))
-    session.commit()
-
-    return booth.boothid
+        return {"message": f"there is no booth identified by {boothCode}"}
+    else:
+        session.execute(update(Booth).where(Booth.boothcode == boothCode).values(state=1))
+        session.commit()
+        booth = session.query(Booth).filter(Booth.boothcode == boothCode).first()
+        return booth
 
 # 사용자 계좌 잔액 충전
-@app.get("/userbankbalance/update/{userId}/{chargeAmount}")
+@app.put("/userbankbalance/update/{userId}/{chargeAmount}")
 async def updateUserBankbalance(userId : int, chargeAmount : int) :
     user = session.query(User).filter(User.userid == userId).first()
     if not user:
@@ -299,19 +320,18 @@ async def updateUserBankbalance(userId : int, chargeAmount : int) :
     session.execute(update(User).where(User.userid == userId).values(bankbalance=newbankbalance))
     session.commit()
     session.refresh(user)
-    return {"message": f"now your bankbalance is {user.bankbalance}."}
+    return user
 
 
 '''delete'''
 
 # 메뉴 삭제하기
-@app.get("/menu/delete/{menuId}")
+@app.delete("/menu/delete/{menuId}")
 async def deleteMenu(menuId : int):
     menu = session.query(Menu).filter(Menu.menuid == menuId).first()
     if not menu:
         return {"message": f"there is no menu id : {menuId}"}
     session.delete(menu)
     session.commit()
-
     return {"message": "success"}
 
