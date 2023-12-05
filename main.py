@@ -15,6 +15,10 @@ async def Main():
     return {"message": 'success'}
 
 '''GET'''
+@app.get("/booth/get")
+async def getBooth():
+    booth = session.query(Booth).all()
+    return booth
 # 특정 부스의 메뉴 목록 확인하기
 @app.get("/menu/get/{boothId}")
 async def getMenu(boothId: int):
@@ -24,7 +28,7 @@ async def getMenu(boothId: int):
 #주문 불이행 목록 확인하기
 @app.get("/ordermenu/get/{boothId}")
 async def getOrdermenu(boothId: int):
-    ordermenu = session.query(OrderMenu).filter((OrderMenu.boothid == boothId) & (OrderMenu.state == 0)).all()
+    ordermenu = session.query(OrderMenu).filter((OrderMenu.boothid == boothId) & (OrderMenu.state == int(0))).all()
     return ordermenu
 
 # 로그인, 회원 정보 수정 등에 사용
@@ -50,13 +54,10 @@ class MenuCreate(BaseModel):
     price: int
 
 # 새로운 메뉴를 추가
-@app.post("/menu/add/{boothid}")
-async def addMenu(boothId: int, menu_data: MenuCreate):
+@app.post("/menu/post")
+async def postMenu(menu_data: MenuCreate):
 
     try:
-        # Use boothId from the path parameters
-        menu_data.boothid = boothId
-        # 여기서 "boothId" 대신 "boothid"를 사용
         new_menu = Menu(boothid = menu_data.boothid,
                         name = menu_data.name,
                         price = menu_data.price
@@ -130,7 +131,75 @@ async def postOrdermenu(ordermenus: List[OrderMenuCreate], order: OrderCreate):
 
     return {"message": 'success'}
 
+## POST USER
+class UserCreate(BaseModel):
+    email: str
+    password: str
+    bank: str
+    bankaccount : str
+    bankbalance : int
 
+# 새로운 메뉴를 추가
+@app.get("/user/post")
+async def postUser(user_data: UserCreate):
+
+    try:
+        new_user = User(email = user_data.email,
+                        password = user_data.password,
+                        bank = user_data.bank,
+                        bankaccount = user_data.bank,
+                        bankbalance = int(0)
+                        )
+
+        # 새로운 메뉴를 데이터베이스에 추가
+        session.add(new_user)
+        session.commit()
+        session.refresh(new_user)
+
+        return {"message": 'success'}
+
+    except Exception as e:
+        # 에러가 발생한 경우 트랜잭션 롤백
+        session.rollback()
+        raise HTTPException(status_code=500, detail=f"내부 서버 오류: {str(e)}")
+        
+## POST STAFF
+class StaffCreate(BaseModel):
+    boothid : int
+    email: str
+    password: str
+    bank: str
+    bankaccount : str
+    bankbalance : int
+    priority : int
+
+# 새로운 메뉴를 추가
+@app.get("/staff/post")
+async def postUser(staff_data: StaffCreate):
+
+    try:
+        new_staff = Staff(boothid = staff_data.boothid,
+                        email = staff_data.email,
+                        password = staff_data.password,
+                        bank = staff_data.bank,
+                        bankaccount = staff_data.bankaccount,
+                        bankbalance = int(0),
+                        priority = staff_data.priority
+                        )
+
+        # 새로운 메뉴를 데이터베이스에 추가
+        session.add(new_staff)
+        session.commit()
+        session.refresh(new_staff)
+
+        return {"message": 'success'}
+
+    except Exception as e:
+        # 에러가 발생한 경우 트랜잭션 롤백
+        session.rollback()
+        raise HTTPException(status_code=500, detail=f"내부 서버 오류: {str(e)}")
+        
+        
 ''' PUT(UPDATE) '''
 class UserCreate(BaseModel):
     email : str
@@ -147,7 +216,7 @@ class StaffCreate(BaseModel):
     bankbalance: Optional[int] = None
 
 # 회원정보 수정하기
-@app.put("/user/update/{email}")
+@app.get("/user/update/{email}")
 def updateUser(email: str, updated_info: UserCreate):
     user = session.query(User).filter(User.email == email).first()
     if user is None:
@@ -206,7 +275,7 @@ async def updateOrdermenuState(ordermenuId : int) :
     session.execute(update(OrderMenu).where(OrderMenu.ordermenuid == ordermenuId).values(state=1))
     session.commit()
 
-    return {"message": 'success'}
+    return upordermenu
 
 # 부스 상태 활성화 및 부스 아이디 반환
 @app.get("/boothstate/update/{boothCode}")
@@ -236,7 +305,7 @@ async def updateUserBankbalance(userId : int, chargeAmount : int) :
 '''delete'''
 
 # 메뉴 삭제하기
-@app.delete("/delete/menu/{menuId}")
+@app.get("/menu/delete/{menuId}")
 async def deleteMenu(menuId : int):
     menu = session.query(Menu).filter(Menu.menuid == menuId).first()
     if not menu:
@@ -244,5 +313,5 @@ async def deleteMenu(menuId : int):
     session.delete(menu)
     session.commit()
 
-    return {"message": 'success'}
+    return {"message": "success"}
 
