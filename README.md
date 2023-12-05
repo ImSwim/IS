@@ -1,5 +1,5 @@
-# url : 
-# groom ide free server
+- url : https://jumpingfrogs.run.goorm.site
+- groom ide free server
 
 - Intellij IDE
 - python 플러그인 설치
