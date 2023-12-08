@@ -160,7 +160,7 @@ class UserCreate(BaseModel):
     bankaccount : str
     bankbalance : Optional[int] = int(0)
 
-# 새로운 메뉴를 추가
+# 새로운 유저를 추가
 @app.post("/user/post")
 async def postUser(user_data: UserCreate):
 
@@ -172,7 +172,7 @@ async def postUser(user_data: UserCreate):
                         bankbalance = user_data.bankbalance
                         )
 
-        # 새로운 메뉴를 데이터베이스에 추가
+        # 새로운 유저저를 데이터베이스에 추가
         session.add(new_user)
         session.commit()
         session.refresh(new_user)
@@ -194,7 +194,7 @@ class StaffCreate(BaseModel):
     bankbalance : Optional[int] = int(0)
     priority : int
 
-# 새로운 메뉴를 추가
+# 새로운 스태프프를 추가
 @app.post("/staff/post")
 async def postStaff(staff_data: StaffCreate):
     try:
@@ -207,7 +207,7 @@ async def postStaff(staff_data: StaffCreate):
                     priority = staff_data.priority
                     )
 
-    # 새로운 메뉴를 데이터베이스에 추가
+    # 새로운 스태프프를 데이터베이스에 추가
         session.add(new_staff)
         session.commit()
         session.refresh(new_staff)
